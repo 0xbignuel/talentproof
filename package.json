@@ -1,0 +1,30 @@
+{
+  "name": "talentproof",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --hostname 0.0.0.0",
+    "build": "next build",
+    "start": "next start --hostname 0.0.0.0",
+    "typecheck": "tsc --noEmit",
+    "test:smoke": "node scripts/smoke.mjs",
+    "ai:local": "node scripts/local-ai.mjs",
+    "demo": "node scripts/demo.mjs"
+  },
+  "dependencies": {
+    "ffmpeg-static": "^5.3.0",
+    "next": "^16.0.0",
+    "pdf-lib": "^1.17.1",
+    "pg": "^8.23.1",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "sharp": "^0.35.5"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/pg": "^8.23.1",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "typescript": "^5.9.0"
+  }
+}

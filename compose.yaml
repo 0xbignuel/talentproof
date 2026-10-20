@@ -1,0 +1,55 @@
+services:
+  app:
+    profiles: ["full"]
+    build: .
+    environment:
+      DATABASE_URL: postgresql://talentproof:${POSTGRES_PASSWORD:?Définissez POSTGRES_PASSWORD dans .env}@db:5432/talentproof
+      WHISPER_URL: http://voice:8000
+      OLLAMA_URL: http://ollama:11434
+      OLLAMA_MODEL: qwen3:0.6b
+      VOICE_SERVICE_TOKEN: ${VOICE_SERVICE_TOKEN:-}
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+      voice:
+        condition: service_started
+      ollama:
+        condition: service_started
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: talentproof
+      POSTGRES_USER: talentproof
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Définissez POSTGRES_PASSWORD dans .env}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U talentproof"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  voice:
+    build:
+      context: .
+      dockerfile: services/voice/Dockerfile
+    environment:
+      WHISPER_MODEL: base
+      VOICE_SERVICE_TOKEN: ${VOICE_SERVICE_TOKEN:-}
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - whisper-models:/models
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "127.0.0.1:11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+volumes:
+  postgres-data:
+  whisper-models:
+  ollama-models:

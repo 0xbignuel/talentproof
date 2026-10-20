@@ -1,0 +1,10 @@
+node_modules
+.next
+.venv
+.models
+.data
+.git
+.env*
+test-results
+*.docx
+*.tsbuildinfo
