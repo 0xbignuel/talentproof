@@ -1,0 +1,13 @@
+'use client';
+import { useEffect, useRef, useState } from 'react';
+import type { Question } from '@/lib/interview';
+import type { useVoice } from '@/hooks/use-voice';
+import { Icon } from './icon';
+type Voice = ReturnType<typeof useVoice>;
+export function InterviewScreen({ question, index, count, answer, onAnswer, voice, onNext }: { question: Question; index: number; count: number; answer: string; onAnswer: (value: string) => void; voice: Voice; onNext: (skip?: boolean) => void }) {
+  const [typing, setTyping] = useState(false); const input = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => { setTyping(false); }, [question.key]);
+  useEffect(() => { if (typing) input.current?.focus(); }, [typing]);
+  const listening = voice.state === 'listening'; const busy = voice.state !== 'idle';
+  return <section className="simple-interview"><div className="simple-progress"><span>{index + 1} / {count}</span><div><span style={{ width: `${(index + 1) / count * 100}%` }}/></div></div><h1>{question.title}</h1><p className="simple-hint">{question.hint}</p><button className="simple-replay" onClick={() => { voice.enable(); voice.speak(question.spoken, true); }} disabled={busy}><Icon name="sound" size={19}/>Réécouter</button><div className="simple-micro"><button className={listening ? 'mic-button recording' : 'mic-button'} disabled={voice.state === 'transcribing'} onClick={() => listening ? voice.stop() : void voice.start()} aria-label={listening ? 'Terminer ma réponse' : 'Parler'}><Icon name={listening ? 'stop' : 'mic'} size={32}/></button><span aria-live="polite">{listening ? 'Je vous écoute. Appuyez pour terminer.' : voice.state === 'transcribing' ? 'Je prépare votre réponse…' : 'Appuyez pour parler'}</span></div>{voice.error && <p className="simple-voice-error" role="status">{voice.error}</p>}{voice.mode === 'browser' && <small className="simple-dictation">Dictée du navigateur</small>}{(typing || answer) && <label className="simple-answer">Votre réponse<textarea ref={input} rows={question.multiline ? 3 : 2} maxLength={question.multiline ? 1200 : 120} value={answer} placeholder={question.placeholder} onChange={e => onAnswer(e.target.value)}/></label>}{!typing && !answer && <button className="simple-write" onClick={() => { voice.cancel(); setTyping(true); }}><Icon name="keyboard" size={18}/>Écrire ma réponse</button>}{answer.trim() && <button className="button primary simple-next" onClick={() => onNext()} disabled={busy}>Continuer<Icon name="arrow" size={20}/></button>}{question.optional && !answer.trim() && <button className="simple-skip" onClick={() => onNext(true)} disabled={busy}>Passer cette question</button>}</section>;
+}

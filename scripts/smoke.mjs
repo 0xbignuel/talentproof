@@ -24,8 +24,10 @@ try {
   r = await post('/api/export/pdf', { ...profile, works: [{ ...profile.works[0], image: 'javascript:alert(1)' }] }); assert.equal(r.status, 400); ok('Sources image invalides rejetées');
   r = await post('/api/export/pdf', profile, { Origin: 'https://untrusted.example' }); assert.equal(r.status, 403); ok('Autre origine refusée');
   // Same-server requests must work through the alias too, with a real browser Origin header.
-  const alias = new URL(base); alias.hostname = alias.hostname === 'localhost' ? '127.0.0.1' : 'localhost';
-  r = await fetch(new URL('/api/export/pdf', alias), { method: 'POST', headers: { Origin: alias.origin, 'Content-Type': 'application/json' }, body: '{}' }); assert.equal(r.status, 400); ok('Origine navigateur acceptée sur localhost et son alias (pas de faux 403)');
+  if (['localhost', '127.0.0.1'].includes(new URL(base).hostname)) {
+    const alias = new URL(base); alias.hostname = alias.hostname === 'localhost' ? '127.0.0.1' : 'localhost';
+    r = await fetch(new URL('/api/export/pdf', alias), { method: 'POST', headers: { Origin: alias.origin, 'Content-Type': 'application/json' }, body: '{}' }); assert.equal(r.status, 400); ok('Origine navigateur acceptée sur localhost et son alias (pas de faux 403)');
+  }
   r = await post('/api/export/pdf', profile); assert.equal(r.status, 200, await errorText(r)); const pdf = Buffer.from(await r.arrayBuffer()); assert.equal(pdf.subarray(0, 5).toString(), '%PDF-'); const document = await PDFDocument.load(pdf); assert(document.getPageCount() >= 1); await writeFile(new URL('portfolio-test.pdf', directory), pdf); ok(`PDF généré et ouvert (${document.getPageCount()} pages)`);
   const legacy = { ...profile }; for (const key of ['tagline', 'availability', 'experience', 'coverId']) delete legacy[key];
   legacy.works = legacy.works.map(({ description, ...work }) => work);

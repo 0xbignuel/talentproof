@@ -4,6 +4,20 @@ PWA Next.js / React / TypeScript, conçue pour une artisane peu familière avec 
 
 ## Essayer sur ce poste Windows
 
+### Sur téléphone : micro et hors connexion
+
+```powershell
+npm.cmd run demo:mobile
+```
+
+Ce lanceur prépare une version de production, ses workers et un lien HTTPS temporaire Cloudflare. Attendre « Ready », puis ouvrir l’adresse `https://…trycloudflare.com` affichée dans le terminal. Autoriser le micro sur **cette nouvelle adresse**. Le tunnel doit rester ouvert ; Ctrl+C l’arrête. Cloudflare transporte les données entre le téléphone et le PC. Ce mode a été explicitement choisi pour le test mobile.
+
+L’adresse HTTP `http://192.168…` ne permet pas l’accès au micro ni l’installation d’un service worker, même si une autorisation a été accordée. Ce n’est pas une restriction que l’application peut contourner.
+
+Un tunnel temporaire change d’adresse à chaque lancement. Le stockage du navigateur est propre à chaque adresse : depuis l’ancien lien, utiliser **Mes informations → Sauvegarder mes informations**, puis sur le nouveau lien **Mes informations → Importer une sauvegarde**. L’ancien brouillon n’est pas supprimé. Une adresse HTTPS stable sera nécessaire pour une PWA durable.
+
+### Sur le PC : développement
+
 Les dépendances, Whisper et le petit modèle Qwen3 sont installés dans le projet. Depuis sa racine :
 
 ```powershell
@@ -55,7 +69,7 @@ Sources : [Whisper et licence MIT](https://github.com/openai/whisper), [faster-w
 
 ## PostgreSQL, Neon et stockage
 
-Le brouillon est conservé dans le localStorage du navigateur, avec un message en cas de stockage plein. Les portfolios publiés sont conservés dans PostgreSQL lorsque `DATABASE_URL` est définie. Le pilote `pg` utilise des requêtes paramétrées, un petit pool de connexions et crée la table `portfolios` au premier usage.
+Le brouillon est conservé dans IndexedDB, avec migration des anciens brouillons localStorage et un message en cas d’échec de sauvegarde. Les portfolios publiés sont conservés dans PostgreSQL lorsque `DATABASE_URL` est définie. Le pilote `pg` utilise des requêtes paramétrées, un petit pool de connexions et crée la table `portfolios` au premier usage.
 
 Sans cette variable, le développement utilise des fichiers dans `.data/portfolios/` pour permettre de tester immédiatement. En production, ce mode est désactivé par défaut : configurer PostgreSQL/Neon, ou définir explicitement `ALLOW_LOCAL_STORAGE=true` uniquement sur un serveur disposant d’un disque persistant. Le lanceur `demo` autorise ce stockage pour le test local.
 
@@ -84,12 +98,20 @@ Pour utiliser un Ollama déjà installé plutôt que le moteur Windows fourni : 
 
 ## PWA et téléphone
 
+Le service worker précache la totalité des ressources de la construction, y compris les scripts des workers photo/PDF et leurs dépendances. La liste et la version sont générées par `scripts/offline-assets.mjs` après `npm run build`, ou par `npm run demo:offline`. Une interface « Disponible hors connexion » confirme la préparation du cache sur un contexte sécurisé. Une navigation sans réseau, ou lorsque le serveur ne répond plus correctement, peut ainsi réutiliser la page en cache.
+
+Deux Web Workers déplacent le traitement des photos et la création du PDF hors du fil de l’interface. Sur les navigateurs sans OffscreenCanvas, la photo est préparée avec un canvas classique. Le PDF dispose d’un repli serveur lorsque la connexion est disponible. Les réponses, photos et progression sont enregistrées dans IndexedDB ; les anciens brouillons localStorage sont conservés et migrés à la lecture. Une erreur de lecture n’entraîne pas l’écrasement du brouillon par un profil vide.
+
+**Disponible sans serveur, après une première ouverture complète :** questions au clavier, reprise de la progression, ajout de photos, récapitulatif, aperçu du portfolio et PDF local. **Connexion au serveur nécessaire :** transcription Whisper, reformulation Qwen, publication/retrait d’une page et MP4. La voix de lecture dépend des voix installées sur le téléphone. Aucune publication différée automatique n’est effectuée.
+
+Pour contrôler le cache et le PDF sans navigateur : `npm run test:offline` (version de production attendue sur le port 3001, ou `TEST_BASE_URL` configurée). Ce test n’est pas une preuve d’installation sur téléphone ni d’autorisation effective du micro.
+
 ```sh
 npm run build
 npm start
 ```
 
-Le service worker est activé uniquement en production. L’ouverture initiale met en cache l’interface, ses scripts, ses icônes et sa police locale DM Sans (licence OFL dans `public/fonts/`). Le formulaire et les photos du brouillon restent utilisables hors connexion. Whisper, la reformulation IA, la publication et les exports serveur nécessitent une connexion au serveur. La dictée du navigateur peut également nécessiter Internet.
+Le service worker est activé uniquement en production. L’ouverture initiale met en cache l’interface, ses scripts, ses icônes et sa police locale DM Sans (licence OFL dans `public/fonts/`). Le formulaire et les photos du brouillon restent utilisables hors connexion. Whisper, la reformulation IA, la publication et la vidéo nécessitent une connexion au serveur ; le PDF peut être créé localement. La dictée du navigateur peut également nécessiter Internet.
 
 L’installation et le micro nécessitent HTTPS ou localhost. Sur un téléphone, une adresse LAN en HTTP n’est pas suffisante pour garantir le micro. Utiliser une adresse HTTPS valide pour le test mobile. Installer depuis le menu du navigateur ; sur iPhone, Safari → Partager → Sur l’écran d’accueil. Le support de la reconnaissance et du partage varie selon le navigateur.
 
@@ -108,5 +130,6 @@ Les requêtes de test incluent maintenant l’en-tête `Origin`, comme un naviga
 Le test vocal synthétique ne mesure pas la qualité sur les voix et accents des utilisatrices. Une erreur a été observée sur le mot « couturière » malgré la bonne reconnaissance de la localisation et des prestations. Les essais avec de vraies artisanes, le micro d’un téléphone, l’installation PWA, le mode avion et le rendu visuel dans un navigateur restent nécessaires avant une démonstration terrain.
 
 Les fichiers de test, modèles, dépendances et données locales sont ignorés par Git et Docker. Le document Word source reste inchangé. Opportunités, propositions commerciales, comptes et paiement restent hors périmètre.
-#   t a l e n t p r o o f  
+#   t a l e n t p r o o f 
+ 
  

@@ -18,7 +18,7 @@ async function videoText(text: string, y: number, size = 28, color = '#142d56') 
   return { input, left: 55, top: y - fontSize };
 }
 const globalJobs = globalThis as typeof globalThis & { talentproofVideoBusy?: boolean };
-export async function makeMp4(p: Profile) {
+export async function makeMp4(p: Profile, withMusic = true) {
   const binary = ffmpeg;
   if (!binary) throw new HttpError(503, 'L’export vidéo n’est pas disponible sur ce serveur.');
   if (globalJobs.talentproofVideoBusy) throw new HttpError(429, 'Une vidéo est en préparation. Réessayez dans quelques instants.');
@@ -46,6 +46,11 @@ export async function makeMp4(p: Profile) {
         videoText(p.showContact && p.phone ? 'PARLONS DE VOTRE PROJET' : 'MERCI DE VOTRE VISITE', 495, 23, '#b8ccff'),
         videoText(p.showContact && p.phone ? p.phone : 'Découvrez mes réalisations.', 560, 38, '#ffffff'),
         videoText(p.availability || '', 625, 21, '#b8ccff'),
+        ...(withMusic ? [
+          videoText('Carefree — Kevin MacLeod (incompetech.com)', 735, 19, '#a4bded'),
+          videoText('CC BY 4.0 · creativecommons.org/licenses/by/4.0/', 768, 17, '#a4bded'),
+          videoText('Extrait adapté : durée, volume et fondus.', 801, 17, '#a4bded'),
+        ] : []),
         videoText('talentproof. · Votre talent mérite sa vitrine.', 878, 19, '#a4bded'),
       ] : [
         videoText('TALENTPROOF · LE SAVOIR-FAIRE A UN VISAGE', 60, 15, '#3063ed'),
@@ -61,8 +66,15 @@ export async function makeMp4(p: Profile) {
     const manifest = frameNames.map((filename, index) => `file '${filename}'\nduration ${scenes[index].duration}`).join('\n') + `\nfile '${frameNames[frameNames.length - 1]}'\n`;
     await writeFile(path.join(directory, 'frames.txt'), manifest);
     const output = path.join(directory, 'portfolio.mp4');
+    const audioArguments = withMusic ? [
+      '-stream_loop', '-1', '-i', path.join(process.cwd(), 'public', 'audio', 'carefree.mp3'),
+      '-map', '0:v:0', '-map', '1:a:0',
+      '-af', `volume=0.22,afade=t=in:st=0:d=0.8,afade=t=out:st=${duration - 1.2}:d=1.2`,
+      '-c:a', 'aac', '-b:a', '128k', '-ar', '44100',
+      '-metadata', 'comment=Carefree by Kevin MacLeod (https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1400037). CC BY 4.0 https://creativecommons.org/licenses/by/4.0/ . Adapted: excerpt, looping, volume, fades.',
+    ] : ['-an'];
     await new Promise<void>((resolve, reject) => {
-      const process = spawn(binary, ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'concat', '-safe', '1', '-i', path.join(directory, 'frames.txt'), '-vf', `fps=24,format=yuv420p,fade=t=in:st=0:d=0.3,fade=t=out:st=${duration - .4}:d=0.4`, '-c:v', 'libx264', '-threads', '2', '-preset', 'veryfast', '-crf', '25', '-t', String(duration), '-movflags', '+faststart', output], { windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] });
+      const process = spawn(binary, ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'concat', '-safe', '1', '-i', path.join(directory, 'frames.txt'), ...audioArguments, '-vf', `fps=24,format=yuv420p,fade=t=in:st=0:d=0.3,fade=t=out:st=${duration - .4}:d=0.4`, '-c:v', 'libx264', '-threads', '2', '-preset', 'veryfast', '-crf', '25', '-t', String(duration), '-movflags', '+faststart', output], { windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] });
       let diagnostic = ''; process.stderr.on('data', chunk => { if (diagnostic.length < 2000) diagnostic += chunk.toString(); });
       const timeout = setTimeout(() => { process.kill(); reject(new HttpError(503, 'La vidéo prend trop de temps. Réessayez avec moins de photos.')); }, 90000);
       process.on('error', () => { clearTimeout(timeout); reject(new HttpError(503, 'Le moteur vidéo n’a pas pu démarrer.')); });

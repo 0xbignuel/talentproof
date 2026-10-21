@@ -9,3 +9,5 @@ out/
 .models/
 __pycache__/
 test-results/
+public/offline-assets.json
+.tools/

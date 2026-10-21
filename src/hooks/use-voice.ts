@@ -1,5 +1,6 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { insecureMicrophoneMessage, microphoneError } from '@/lib/microphone';
 
 type Recognition = { lang: string; interimResults: boolean; continuous: boolean; onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null; onerror: ((event: { error: string }) => void) | null; onend: (() => void) | null; start: () => void; stop: () => void; abort: () => void };
 type SpeechWindow = Window & { SpeechRecognition?: new () => Recognition; webkitSpeechRecognition?: new () => Recognition };
@@ -18,11 +19,18 @@ export function useVoice(onTranscript: (text: string) => void) {
   const request = useRef<AbortController | null>(null);
   const session = useRef(0); const starting = useRef(false);
   useEffect(() => {
-    fetch('/api/health').then(r => r.json()).then(data => {
+    let active = true;
+    const detect = () => {
+    if (!window.isSecureContext) { setMode('unavailable'); setError(insecureMicrophoneMessage); return; }
+    fetch('/api/health', { signal: AbortSignal.timeout(4000) }).then(r => r.json()).then(data => {
+      if (!active) return;
       if (data.voice === 'ready' && typeof navigator.mediaDevices?.getUserMedia === 'function' && 'MediaRecorder' in window) setMode('whisper');
       else { const w = window as SpeechWindow; setMode(w.SpeechRecognition || w.webkitSpeechRecognition ? 'browser' : 'unavailable'); }
-    }).catch(() => { const w = window as SpeechWindow; setMode(w.SpeechRecognition || w.webkitSpeechRecognition ? 'browser' : 'unavailable'); });
+    }).catch(() => { if (!active) return; const w = window as SpeechWindow; setMode(w.SpeechRecognition || w.webkitSpeechRecognition ? 'browser' : 'unavailable'); });
+    };
+    detect(); window.addEventListener('online', detect);
     return () => {
+      active = false; window.removeEventListener('online', detect);
       request.current?.abort(); recognition.current?.abort();
       if (timer.current) clearTimeout(timer.current);
       if (recorder.current?.state === 'recording') { recorder.current.onstop = null; recorder.current.stop(); }
@@ -58,6 +66,8 @@ export function useVoice(onTranscript: (text: string) => void) {
     starting.current = true; const currentSession = ++session.current;
     hush(); setError('');
     try {
+      if (!window.isSecureContext) throw new Error(insecureMicrophoneMessage);
+      if (!navigator.onLine) throw new Error('Sans connexion au service vocal, vous pouvez écrire votre réponse. Elle sera conservée sur cet appareil.');
       if (mode === 'browser') {
         const w = window as SpeechWindow; const Constructor = w.SpeechRecognition || w.webkitSpeechRecognition;
         if (!Constructor) throw new Error('Le micro n’est pas disponible. Vous pouvez écrire votre réponse.');
@@ -67,8 +77,7 @@ export function useVoice(onTranscript: (text: string) => void) {
         r.onend = () => { setState('idle'); if (timer.current) clearTimeout(timer.current); };
         r.start(); setState('listening'); timer.current = setTimeout(() => r.stop(), 45000); return;
       }
-      if (mode !== 'whisper') throw new Error('Le micro n’est pas disponible ici. Vous pouvez écrire votre réponse.');
-      if (!window.isSecureContext) throw new Error('Ouvrez TalentProof avec une adresse HTTPS pour utiliser le micro sur votre téléphone.');
+      if (typeof navigator.mediaDevices?.getUserMedia !== 'function' || !('MediaRecorder' in window)) throw new Error('Ce navigateur ne permet pas l’enregistrement vocal. Essayez Safari ou Chrome, ou écrivez votre réponse.');
       const media = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true }, video: false }); stream.current = media;
       if (currentSession !== session.current) { media.getTracks().forEach(track => track.stop()); return; }
       const type = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/webm'].find(t => MediaRecorder.isTypeSupported(t));
@@ -90,7 +99,7 @@ export function useVoice(onTranscript: (text: string) => void) {
       };
       r.onerror = () => { setError('Le micro a été interrompu. Réessayez.'); media.getTracks().forEach(t => t.stop()); setState('idle'); };
       r.start(); setState('listening'); timer.current = setTimeout(() => { if (r.state === 'recording') r.stop(); }, 45000);
-    } catch (e) { stream.current?.getTracks().forEach(t => t.stop()); setState('idle'); setError((e as Error).name === 'NotAllowedError' ? 'Autorisez le micro pour parler, ou écrivez votre réponse.' : (e as Error).message); }
+    } catch (e) { stream.current?.getTracks().forEach(t => t.stop()); setState('idle'); setError(microphoneError(e)); }
     finally { starting.current = false; }
   }, [state, mode, hush]);
   return { state, speaking, muted, setMuted, error, mode, start, stop, cancel, speak, hush, enable };

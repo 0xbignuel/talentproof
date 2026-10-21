@@ -1,36 +1,44 @@
 'use client';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { emptyProfile, type Profile } from '@/lib/portfolio';
+import { readDraft, saveDraft } from '@/lib/drafts';
+import { parseProfile } from '@/lib/profile-storage';
 const KEY = 'talentproof-profile-v1';
 export function useProfile() {
   const [profile, setProfile] = useState<Profile>(emptyProfile);
   const [ready, setReady] = useState(false);
   const [saveError, setSaveError] = useState('');
+  const [canSave, setCanSave] = useState(false);
+  const latest = useRef(profile); latest.current = profile;
   useEffect(() => {
+    let active = true;
+    async function load() {
     try {
-      const stored = localStorage.getItem(KEY);
-      if (stored) {
-        const value = JSON.parse(stored) as Record<string, unknown>;
-        const loaded: Profile = { ...emptyProfile, works: [] };
-        for (const key of ['owner', 'extra', 'name', 'job', 'city', 'phone', 'services', 'bio'] as const) {
-          if (typeof value[key] === 'string') loaded[key] = value[key].slice(0, key === 'bio' ? 2000 : key === 'services' || key === 'extra' ? 1200 : 120);
-        }
-        for (const key of ['tagline', 'availability', 'experience', 'coverId'] as const) {
-          if (typeof value[key] === 'string') loaded[key] = value[key].slice(0, key === 'coverId' ? 80 : key === 'tagline' ? 120 : 180);
-        }
-        if (Array.isArray(value.works)) loaded.works = value.works.filter(w => w && typeof w.id === 'string' && typeof w.title === 'string' && typeof w.image === 'string' && /^data:image\/(jpeg|png|webp);base64,/.test(w.image)).slice(0, 6).map(w => ({ id: w.id, title: w.title.slice(0, 120), image: w.image, description: typeof w.description === 'string' ? w.description.slice(0, 400) : '' }));
-        loaded.showContact = value.showContact === true; loaded.validated = value.validated === true;
-        setProfile(loaded);
+      let value = await readDraft<Record<string, unknown>>('profile');
+      if (!value) { const stored = localStorage.getItem(KEY); if (stored) value = JSON.parse(stored); }
+      if (value) {
+        const loaded = parseProfile(value, true);
+        if (active) setProfile(loaded);
       }
+      if (active) setCanSave(true);
     }
-    catch { setSaveError('La sauvegarde locale ne peut pas être lue.'); }
-    setReady(true);
+    catch { if (active) setSaveError('La sauvegarde locale ne peut pas être lue.'); }
+    if (active) setReady(true);
+    }
+    void load(); return () => { active = false; };
   }, []);
   useEffect(() => {
-    if (!ready) return;
-    try { localStorage.setItem(KEY, JSON.stringify(profile)); setSaveError(''); }
-    catch { setSaveError('Stockage plein ou indisponible. Téléchargez une sauvegarde et réduisez vos photos.'); }
-  }, [profile, ready]);
+    if (!ready || !canSave) return;
+    const timer = setTimeout(() => {
+      saveDraft('profile', profile).then(() => setSaveError('')).catch(() => setSaveError('L’enregistrement sur cet appareil est indisponible. Gardez une sauvegarde de vos informations.'));
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [profile, ready, canSave]);
+  useEffect(() => {
+    if (!ready || !canSave) return;
+    const save = () => { void saveDraft('profile', latest.current).catch(() => {}); };
+    window.addEventListener('pagehide', save); return () => window.removeEventListener('pagehide', save);
+  }, [ready, canSave]);
   const update = useCallback((patch: Partial<Profile>) => setProfile(current => ({ ...current, ...patch, validated: patch.validated ?? false })), []);
   return { profile, update, ready, saveError };
 }

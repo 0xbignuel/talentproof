@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import '@/components/identity-options.css';
+import '@/components/simple-flow.css';
 
 export const metadata: Metadata = {
   title: 'TalentProof — Votre talent a une voix',

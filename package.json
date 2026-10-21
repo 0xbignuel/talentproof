@@ -5,11 +5,16 @@
   "scripts": {
     "dev": "next dev --hostname 0.0.0.0",
     "build": "next build",
+    "postbuild": "node scripts/offline-assets.mjs",
     "start": "next start --hostname 0.0.0.0",
     "typecheck": "tsc --noEmit",
     "test:smoke": "node scripts/smoke.mjs",
+    "test:offline": "node scripts/test-offline.mjs",
+    "test:video": "node scripts/test-video.mjs",
     "ai:local": "node scripts/local-ai.mjs",
-    "demo": "node scripts/demo.mjs"
+    "demo": "node scripts/demo.mjs",
+    "demo:offline": "node scripts/demo.mjs --offline",
+    "demo:mobile": "node scripts/mobile.mjs"
   },
   "dependencies": {
     "ffmpeg-static": "^5.3.0",

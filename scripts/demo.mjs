@@ -6,6 +6,7 @@ import path from 'node:path';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const children = [];
+const offline = process.argv.includes('--offline');
 const python = path.join(root, '.venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
 const env = { ...process.env, ALLOW_LOCAL_STORAGE: 'true', LLAMA_URL: process.env.LLAMA_URL || 'http://127.0.0.1:8081' };
 // Next supplies its environment loader; secrets remain in the process, never printed.
@@ -22,8 +23,13 @@ if (!(await running('http://127.0.0.1:8000/health'))) {
   else console.log('Whisper non installé. Consultez le README ; la dictée du navigateur reste disponible selon sa compatibilité.');
 }
 if (!(await running(env.LLAMA_URL + '/health')) && process.platform === 'win32') start(process.execPath, ['scripts/local-ai.mjs']);
+if (offline) {
+  console.log('Préparation de la PWA et du mode hors connexion…');
+  await new Promise((resolve, reject) => { const child = start(process.execPath, ['node_modules/next/dist/bin/next', 'build']); child.on('exit', code => code === 0 ? resolve() : reject(new Error('La construction de la PWA a échoué.'))); });
+  await new Promise((resolve, reject) => { const child = start(process.execPath, ['scripts/offline-assets.mjs']); child.on('exit', code => code === 0 ? resolve() : reject(new Error('La préparation hors connexion a échoué.'))); });
+}
 let existingPort = 0;
-if (existsSync(path.join(root, '.next', 'dev', 'lock'))) {
+if (!offline && existsSync(path.join(root, '.next', 'dev', 'lock'))) {
   for (let candidate = 3000; candidate <= 3020; candidate++) {
     try { const response = await fetch(`http://localhost:${candidate}/api/health`, { signal: AbortSignal.timeout(500) }); const status = await response.json(); if (response.ok && 'voice' in status && 'assistant' in status && 'storage' in status) { existingPort = candidate; break; } } catch {}
   }
@@ -31,7 +37,7 @@ if (existsSync(path.join(root, '.next', 'dev', 'lock'))) {
 let port = existingPort || Number(process.env.PORT || 3000);
 if (!existingPort) {
   while (!(await available(port))) { port++; if (port > 3020) throw new Error('Aucun port disponible entre 3000 et 3020.'); }
-  start(process.execPath, ['node_modules/next/dist/bin/next', 'dev', '--hostname', '0.0.0.0', '--port', String(port)]);
+  start(process.execPath, ['node_modules/next/dist/bin/next', offline ? 'start' : 'dev', '--hostname', '0.0.0.0', '--port', String(port)]);
 }
 console.log(`\nTalentProof : http://localhost:${port}${existingPort ? ' (serveur déjà démarré)' : ''}\nGardez ce terminal ouvert si des services y démarrent. Ctrl+C pour les arrêter.\n`);
 let stopping = false;
